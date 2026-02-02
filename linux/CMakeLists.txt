@@ -69,10 +69,38 @@ set_target_properties(${BINARY_NAME}
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/intermediates_do_not_run"
 )
 
-
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
+
+# Automatically patch flutter_sound plugin files during CMake configuration
+# This must run AFTER the plugins are configured but BEFORE compilation
+execute_process(
+  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_flutter_sound.sh" 
+    "${CMAKE_CURRENT_SOURCE_DIR}/flutter/generated_plugin_registrant.cc"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  RESULT_VARIABLE PATCH_RESULT
+  OUTPUT_VARIABLE PATCH_OUTPUT
+  ERROR_VARIABLE PATCH_ERROR
+)
+
+if(PATCH_RESULT EQUAL 0)
+  message(STATUS "${PATCH_OUTPUT}")
+else()
+  message(WARNING "Failed to patch flutter_sound: ${PATCH_ERROR}")
+endif()
+
+# Workaround for flutter_sound plugin naming mismatch
+# flutter_sound uses 'taudio_plugin' internally but Flutter expects 'flutter_sound_plugin'
+# Create an alias to satisfy both references
+if(TARGET taudio_plugin)
+  if(NOT TARGET flutter_sound_plugin)
+    add_library(flutter_sound_plugin ALIAS taudio_plugin)
+  endif()
+  # Also update the plugin bundled libraries list to use the correct target
+  list(REMOVE_ITEM PLUGIN_BUNDLED_LIBRARIES "$<TARGET_FILE:flutter_sound_plugin>")
+  list(APPEND PLUGIN_BUNDLED_LIBRARIES "$<TARGET_FILE:taudio_plugin>")
+endif()
 
 
 # === Installation ===
